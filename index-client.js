@@ -2,11 +2,13 @@ var awsIot = require('aws-iot-device-sdk');
 var rpio = require('rpio');
 const { exec } = require("child_process");
 
-const PIN_BUZZER = 32;
+const PIN_BUZZER_BEEP1 = 32;
+const PIN_BUZZER_BEEP2 = 33;
 
 rpio.open(12, rpio.OUTPUT, rpio.LOW); //Will be connected to Arduino D2
 rpio.open(7, rpio.OUTPUT, rpio.LOW); //Will be connected to Arduino
-rpio.open(PIN_BUZZER, rpio.OUTPUT, rpio.LOW); //Will be connected to Buzzer
+rpio.open(PIN_BUZZER_BEEP1, rpio.OUTPUT, rpio.LOW); //Will be connected to Arduino
+rpio.open(PIN_BUZZER_BEEP2, rpio.OUTPUT, rpio.LOW); //Will be connected to Arduino
 
 var device = awsIot.device({
     keyPath: '/home/pi/AWS-RPServoTest/certs/b8ec3871b6-private.pem.key',
@@ -56,28 +58,36 @@ device.on('message', function(topic, payload) {
             if(currentId && tempId == currentId) {
                 isLockedStatus = false;
                 currentId = null;
+                console.log('Security status: UNLOCKED. Delaying next read...');
+                unlockRpio();
                 beep2times();
+                setTimeout(pollNFC, 500);
             }
             else if (!isLockedStatus) {
                 currentId = tempId;
                 isLockedStatus = true;
+                console.log('Security status: LOCKED. Delaying next read...');
+                lockRpio();
                 beep2times();
+                setTimeout(pollNFC, 500);
             }
             else {
                 beep1time();
+                pollNFC();
             }
-        }
 
-        if(isLockedStatus) {
-            console.log('Security status: LOCKED');
-    		lockRpio();
-            pollNFC();
+            // if(isLockedStatus) {
+            //     console.log('Security status: LOCKED');
+            //     lockRpio();
+            //     pollNFC();
+            // }
+            // else {
+            //     console.log('Security status: UNLOCKED. Delaying read for 2 secs...');
+            //     unlockRpio();
+            //     setTimeout(pollNFC, 2000);
+            // }
         }
-        else {
-            console.log('Security status: UNLOCKED');
-            unlockRpio();
-            setTimeout(pollNFC, 3000);
-        }
+        else pollNFC();
     }
 });
 
@@ -86,7 +96,7 @@ device.on('message', function(topic, payload) {
 const pollNFC = () => {
     exec("sudo nfc-poll", (error, stdout, stderr) => {
         if (error || stderr) {
-            console.log(`NFC Poll status: No card detected. Retrying after 3 secs...`);
+            console.log(`NFC Poll status: No card detected. Retrying...`);
             return setTimeout(pollNFC, 300); 
         }
         else {
@@ -107,7 +117,7 @@ const pollNFC = () => {
                 }
             }
             catch(e) {
-                console.log(`NFC Poll status: Unexpected serial response. Retrying after 3 secs...`);
+                console.log(`NFC Poll status: Unexpected serial response. Retrying...`);
                 return setTimeout(pollNFC, 300); 
             }
         }
@@ -126,23 +136,17 @@ const unlockRpio = function () {
 }
 
 const beep1time = function () {
-    rpio.write(PIN_BUZZER, rpio.HIGH);
+    rpio.write(PIN_BUZZER_BEEP1, rpio.HIGH);
     setTimeout(function () {
-        rpio.write(PIN_BUZZER, rpio.LOW);
+        rpio.write(PIN_BUZZER_BEEP1, rpio.LOW);
     }, 1000);
 }
 
 const beep2times = function () {
-    rpio.write(PIN_BUZZER, rpio.HIGH);
+    rpio.write(PIN_BUZZER_BEEP2, rpio.HIGH);
     setTimeout(function () {
-        rpio.write(PIN_BUZZER, rpio.LOW);
-        setTimeout(function () {
-            rpio.write(PIN_BUZZER, rpio.HIGH);
-            setTimeout(function () {
-                rpio.write(PIN_BUZZER, rpio.LOW);
-            }, 500);
-        }, 300)
-    }, 500);
+        rpio.write(PIN_BUZZER_BEEP2, rpio.LOW);
+    }, 1000);
 }
 
 pollNFC();
